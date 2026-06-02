@@ -34,7 +34,7 @@ RUN chown -R www-data:www-data /var/www/html/storage /var/www/html/bootstrap/cac
 # Set permissions for Laravel storage
 RUN chown -R www-data:www-data /var/www/html/storage /var/www/html/bootstrap/cache
 
-# Automatically run migrations on startup
+# 🚀 ADD THIS LINE RIGHT HERE:
 ENTRYPOINT ["sh", "-c", "php artisan migrate --force && apache2-foreground"]
 
 EXPOSE 80
