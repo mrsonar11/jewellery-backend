@@ -3,7 +3,10 @@
 return [
     'paths' => ['api/*', 'sanctum/csrf-cookie'],
     'allowed_methods' => ['*'],
-    'allowed_origins' => ['http://localhost:5173', 'https://ambika-jewellers-ten.vercel.app' ], 
+    'allowed_origins' => ['*'], // 👈 Allow everything globally for now
+    'allowed_origins_patterns' => [],
     'allowed_headers' => ['*'],
-    'supports_credentials' => true,
+    'exposed_headers' => [],
+    'max_age' => 0,
+    'supports_credentials' => false,
 ];
