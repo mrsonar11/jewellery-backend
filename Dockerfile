@@ -31,10 +31,11 @@ RUN composer install --no-dev --optimize-autoloader
 # Set permissions for Laravel storage
 RUN chown -R www-data:www-data /var/www/html/storage /var/www/html/bootstrap/cache
 
-# 🚀 ADD THIS LINE RIGHT HERE:
-RUN echo "PassEnv APP_KEY DB_CONNECTION DATABASE_URL APP_ENV APP_DEBUG JWT_SECRET" >> /etc/apache2/apache2.conf
+# Pass variables down and explicitly enable Apache directory overrides for public/ routing
+RUN echo "PassEnv APP_KEY DB_CONNECTION DATABASE_URL APP_ENV APP_DEBUG JWT_SECRET" >> /etc/apache2/apache2.conf \
+    && sed -i '/<Directory \/var\/www\/>/,/<\/Directory>/ s/AllowOverride None/AllowOverride All/' /etc/apache2/apache2.conf
 
-# 🚀 ADD THIS LINE RIGHT HERE:
-ENTRYPOINT ["sh", "-c", "php artisan config:clear && php artisan cache:clear && apache2-foreground"]
+# Wipe out all configuration and route caches completely on startup
+ENTRYPOINT ["sh", "-c", "php artisan config:clear && php artisan route:clear && php artisan cache:clear && apache2-foreground"]
 
 EXPOSE 80
