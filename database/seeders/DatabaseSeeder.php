@@ -6,26 +6,24 @@ use Illuminate\Database\Seeder;
 use App\Models\User;
 use App\Models\Category;
 use App\Models\Product;
-use Illuminate\Support\Facades\DB;      // <-- Add this line
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Schema;
 
 class DatabaseSeeder extends Seeder
 {    
-    public function run()
+    /**
+     * Seed the application's database.
+     */
+    public function run(): void
     {
-        if (DB::getDriverName() === 'pgsql') {
-            DB::statement('SET CONSTRAINTS ALL DEFERRED;');
-        } else {
-            DB::statement('SET FOREIGN_KEY_CHECKS=0;');
-        }
+        // 🚀 Safely disable foreign key checks across BOTH MySQL and PostgreSQL
+        Schema::disableForeignKeyConstraints();
 
-        // Truncate tables (order matters due to foreign keys)
-        DB::statement('SET FOREIGN_KEY_CHECKS=0');
+        // Truncate tables cleanly
         Product::truncate();
         Category::truncate();
         User::truncate();
-        DB::statement('SET FOREIGN_KEY_CHECKS=1');
 
         // Create admin
         User::create([
@@ -58,8 +56,7 @@ class DatabaseSeeder extends Seeder
             'barcode_sku' => 'GOLD001'
         ]);
 
-        if (DB::getDriverName() !== 'pgsql') {
-            DB::statement('SET FOREIGN_KEY_CHECKS=1;');
-        }
+        // 🚀 Re-enable foreign key checks safely
+        Schema::enableForeignKeyConstraints();
     }
 }
