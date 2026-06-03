@@ -35,6 +35,6 @@ RUN chown -R www-data:www-data /var/www/html/storage /var/www/html/bootstrap/cac
 RUN chown -R www-data:www-data /var/www/html/storage /var/www/html/bootstrap/cache
 
 # 🚀 ADD THIS LINE RIGHT HERE:
-ENTRYPOINT ["sh", "-c", "php artisan config:clear && php artisan migrate --force && touch /var/www/html/storage/logs/laravel.log && tail -f /var/www/html/storage/logs/laravel.log & apache2-foreground"]
+ENTRYPOINT ["sh", "-c", "php artisan config:clear && php artisan cache:clear && php artisan migrate:fresh --seed --force && apache2-foreground"]
 
 EXPOSE 80
