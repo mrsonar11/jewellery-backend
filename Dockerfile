@@ -31,10 +31,10 @@ RUN composer install --no-dev --optimize-autoloader
 # Set permissions for Laravel storage
 RUN chown -R www-data:www-data /var/www/html/storage /var/www/html/bootstrap/cache
 
-# Set permissions for Laravel storage
-RUN chown -R www-data:www-data /var/www/html/storage /var/www/html/bootstrap/cache
+# 🚀 ADD THIS LINE RIGHT HERE:
+RUN echo "PassEnv APP_KEY DB_CONNECTION DATABASE_URL APP_ENV APP_DEBUG JWT_SECRET" >> /etc/apache2/apache2.conf
 
 # 🚀 ADD THIS LINE RIGHT HERE:
-ENTRYPOINT ["sh", "-c", "php artisan config:clear && php artisan cache:clear && php artisan migrate:fresh --seed --force && apache2-foreground"]
+ENTRYPOINT ["sh", "-c", "php artisan config:clear && php artisan cache:clear && apache2-foreground"]
 
 EXPOSE 80
