@@ -11,15 +11,15 @@ use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Schema;
 
 class DatabaseSeeder extends Seeder
-{
-    if (DB::getDriverName() === 'pgsql') {
-        DB::statement('SET CONSTRAINTS ALL DEFERRED;');
-    } else {
-        DB::statement('SET FOREIGN_KEY_CHECKS=0;');
-    }
-
+{    
     public function run()
     {
+        if (DB::getDriverName() === 'pgsql') {
+            DB::statement('SET CONSTRAINTS ALL DEFERRED;');
+        } else {
+            DB::statement('SET FOREIGN_KEY_CHECKS=0;');
+        }
+
         // Truncate tables (order matters due to foreign keys)
         DB::statement('SET FOREIGN_KEY_CHECKS=0');
         Product::truncate();
@@ -57,8 +57,9 @@ class DatabaseSeeder extends Seeder
             'stock_quantity' => 10,
             'barcode_sku' => 'GOLD001'
         ]);
-    }
-    if (DB::getDriverName() !== 'pgsql') {
-        DB::statement('SET FOREIGN_KEY_CHECKS=1;');
+
+        if (DB::getDriverName() !== 'pgsql') {
+            DB::statement('SET FOREIGN_KEY_CHECKS=1;');
+        }
     }
 }
