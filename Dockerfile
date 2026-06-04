@@ -35,7 +35,7 @@ RUN chown -R www-data:www-data /var/www/html/storage /var/www/html/bootstrap/cac
 RUN echo "PassEnv APP_KEY DB_CONNECTION DATABASE_URL APP_ENV APP_DEBUG JWT_SECRET" >> /etc/apache2/apache2.conf \
     && sed -i '/<Directory \/var\/www\/>/,/<\/Directory>/ s/AllowOverride None/AllowOverride All/' /etc/apache2/apache2.conf
 
-# Wipe out all configuration and route caches completely on startup
-ENTRYPOINT ["sh", "-c", "php artisan config:clear && php artisan route:clear && php artisan cache:clear && apache2-foreground"]
+# Clear caches and automatically run the new migration file on startup
+ENTRYPOINT ["sh", "-c", "php artisan config:clear && php artisan route:clear && php artisan cache:clear && php artisan migrate --force && apache2-foreground"]
 
 EXPOSE 80
