@@ -51,25 +51,29 @@ class InvoiceController extends Controller
             
             foreach ($request->items as $item) {
                 $product = Product::find($item['product_id']);
-                // Check stock
-                if ($product->stock_quantity < $item['quantity']) {
-                    throw new \Exception("Insufficient stock for product: {$product->product_name}");
-                }
-                
-                $itemTotal = $product->selling_price * $item['quantity'];
+                // Use provided values, fallback to product defaults
+                $unitPrice = $item['unit_price'] ?? $product->selling_price;
+                $makingCharges = $item['making_charges_total'] ?? 0;
+                $stoneCharges = $item['stone_charges_total'] ?? 0;
+                $gstPercent = $item['gst_percent'] ?? $product->gst_percent;
+
+                $itemTotal = $unitPrice * $item['quantity'];
                 $subtotal += $itemTotal;
-                $totalMaking += $product->making_charges * $item['quantity'];
-                $totalStone += $product->stone_charges * $item['quantity'];
-                
-                $itemsData[] = [
+                $totalMaking += $makingCharges;
+                $totalStone += $stoneCharges;
+                $totalGST += ($itemTotal + $makingCharges + $stoneCharges) * ($gstPercent / 100);
+
+                // Save invoice item
+                InvoiceItem::create([
+                    'invoice_id' => $invoice->id,
                     'product_id' => $product->id,
                     'quantity' => $item['quantity'],
-                    'unit_price' => $product->selling_price,
-                    'making_charges' => $product->making_charges,
-                    'stone_charges' => $product->stone_charges,
-                    'gst_percent' => $product->gst_percent,
-                    'total' => $itemTotal
-                ];
+                    'unit_price' => $unitPrice,
+                    'making_charges' => $makingCharges,
+                    'stone_charges' => $stoneCharges,
+                    'gst_percent' => $gstPercent,
+                    'total' => $itemTotal,
+                ]);
             }
             
             $taxableAmount = $subtotal + $totalMaking + $totalStone;
