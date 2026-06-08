@@ -10,7 +10,7 @@ use App\Http\Controllers\API\StockController;
 use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\API\RateController;
 use App\Http\Controllers\API\UserController;
-
+use App\Http\Controllers\API\MortgageController;
 // Public route
 Route::post('/login', [AuthController::class, 'login']);
 
@@ -33,6 +33,7 @@ Route::middleware('auth:api')->group(function () {
     Route::get('invoices', [InvoiceController::class, 'index']);
     Route::post('invoices', [InvoiceController::class, 'store']);
     Route::get('invoices/{id}', [InvoiceController::class, 'show']);
+    Route::post('/invoices/{id}/pay', [InvoiceController::class, 'recordPayment']);
     
     // Stock
     Route::post('stock/in', [StockController::class, 'stockIn']);
@@ -54,4 +55,8 @@ Route::middleware('auth:api')->group(function () {
     Route::apiResource('users', UserController::class);
 
     Route::get('/rates/today/comparison', [RateController::class, 'todayWithComparison']);
+
+    // Mortgage
+    Route::apiResource('mortgages', MortgageController::class);
+    Route::post('/mortgages/{id}/payments', [MortgageController::class, 'addPayment']);
 });

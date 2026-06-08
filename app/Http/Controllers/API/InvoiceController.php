@@ -54,33 +54,33 @@ class InvoiceController extends Controller
 
         // First pass: calculate totals
         foreach ($request->items as $item) {
-            $product = Product::find($item['product_id']);
-            $unitPrice = $item['unit_price'];
-            $makingLine = $item['making_charges_total'] ?? 0;
-            $stoneLine = $item['stone_charges_total'] ?? 0;
-            $gstPercent = $item['gst_percent'] ?? $product->gst_percent;
-            $weight = $item['weight'] ?? $product->weight;
+    $product = Product::find($item['product_id']);
+    $unitPrice = $item['unit_price'];
+    $makingLine = $item['making_charges_total'] ?? 0;
+    $stoneLine = $item['stone_charges_total'] ?? 0;
+    $gstPercent = isset($item['gst_percent']) ? (float)$item['gst_percent'] : $product->gst_percent;
+    $weight = $item['weight'] ?? $product->weight;
 
-            $itemTotal = $unitPrice * $item['quantity'];
-            $subtotal += $itemTotal;
-            $totalMaking += $makingLine;
-            $totalStone += $stoneLine;
-            $totalGST += ($itemTotal + $makingLine + $stoneLine) * ($gstPercent / 100);
+    $itemTotal = $unitPrice * $item['quantity'];
+    $subtotal += $itemTotal;
+    $totalMaking += $makingLine;   // for display only
+    $totalStone += $stoneLine;     // for display only
+    $totalGST += $itemTotal * ($gstPercent / 100);   // ✅ GST on itemTotal only
 
-            $itemsData[] = [
-                'product_id' => $product->id,
-                'product_name' => $item['product_name'] ?? null,
-                'quantity' => $item['quantity'],
-                'weight' => $weight,
-                'unit_price' => $unitPrice,
-                'making_charges' => $makingLine,
-                'stone_charges' => $stoneLine,
-                'gst_percent' => $gstPercent,
-                'total' => $itemTotal,
-            ];
-        }
+    $itemsData[] = [
+        'product_id' => $product->id,
+        'product_name' => $item['product_name'] ?? null,
+        'quantity' => $item['quantity'],
+        'weight' => $weight,
+        'unit_price' => $unitPrice,
+        'making_charges' => $makingLine,
+        'stone_charges' => $stoneLine,
+        'gst_percent' => $gstPercent,
+        'total' => $itemTotal,
+    ];
+}
 
-        $taxableAmount = $subtotal + $totalMaking + $totalStone;
+        $taxableAmount = $subtotal;
         $discountAmount = 0;
         if ($request->discount_type == 'percentage') {
             $discountAmount = ($taxableAmount + $totalGST) * ($request->discount_value / 100);
@@ -160,4 +160,31 @@ return response()->json(['message' => 'Invoice created', 'invoice' => $invoice],
             $invoice = Invoice::with('customer', 'items.product.category')->findOrFail($id);
             return response()->json($invoice);
         }
+
+    public function recordPayment(Request $request, $id)
+{
+    $request->validate([
+        'amount' => 'required|numeric|min:0.01'
+    ]);
+
+    $invoice = Invoice::findOrFail($id);
+    $newPaid = $invoice->paid_amount + $request->amount;
+
+    if ($newPaid > $invoice->grand_total) {
+        return response()->json(['error' => 'Amount exceeds due amount'], 422);
+    }
+
+    $invoice->paid_amount = $newPaid;
+    $invoice->due_amount = $invoice->grand_total - $newPaid;
+    $invoice->payment_status = $invoice->due_amount <= 0 ? 'paid' : ($newPaid > 0 ? 'partial' : 'unpaid');
+    $invoice->save();
+
+    Payment::create([
+        'invoice_id' => $invoice->id,
+        'amount' => $request->amount,
+        'payment_method' => 'cash'   // you can add a dropdown later
+    ]);
+
+    return response()->json(['message' => 'Payment recorded', 'invoice' => $invoice]);
+}
 }
