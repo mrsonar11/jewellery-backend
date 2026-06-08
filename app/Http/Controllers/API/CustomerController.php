@@ -8,6 +8,7 @@ use Illuminate\Http\Request;
 use App\Http\Controllers\Controller;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Storage;
 
 class CustomerController extends Controller
 {
@@ -62,30 +63,55 @@ class CustomerController extends Controller
             'name' => 'required|string|max:100',
             'mobile' => 'required|string|max:20|unique:customers',
             'email' => 'nullable|email|unique:customers',
+            'id_proof' => 'nullable|image|max:2048', // 2MB max
         ]);
-        
+
         if ($validator->fails()) {
             return response()->json(['errors' => $validator->errors()], 422);
         }
-        
-        $customer = Customer::create($request->all());
+
+        $data = $request->only(['name', 'mobile', 'address', 'email', 'gst_number']);
+        if ($request->hasFile('id_proof')) {
+            $path = $request->file('id_proof')->store('customer_id_proofs', 'public');
+            $data['id_proof_path'] = $path;
+        }
+
+        $customer = Customer::create($data);
         return response()->json(['message' => 'Customer added', 'customer' => $customer], 201);
     }
 
     public function update(Request $request, $id)
     {
         $customer = Customer::findOrFail($id);
+        
         $validator = Validator::make($request->all(), [
             'name' => 'sometimes|string|max:100',
             'mobile' => 'sometimes|string|max:20|unique:customers,mobile,'.$id,
             'email' => 'nullable|email|unique:customers,email,'.$id,
+            'id_proof' => 'nullable|image|max:2048',
         ]);
-        
+
         if ($validator->fails()) {
             return response()->json(['errors' => $validator->errors()], 422);
         }
+
+        $data = $request->only(['name', 'mobile', 'address', 'email', 'gst_number']);
+
+        // Handle file upload
+        if ($request->hasFile('id_proof') && $request->file('id_proof')->isValid()) {
+            // Delete old file if exists
+            if ($customer->id_proof_path) {
+                \Storage::disk('public')->delete($customer->id_proof_path);
+            }
+            $path = $request->file('id_proof')->store('customer_id_proofs', 'public');
+            $data['id_proof_path'] = $path;
+        }
+
+        $customer->update($data);
         
-        $customer->update($request->all());
+        // Reload the customer to include the updated path
+        $customer->refresh();
+        
         return response()->json(['message' => 'Customer updated', 'customer' => $customer]);
     }
 

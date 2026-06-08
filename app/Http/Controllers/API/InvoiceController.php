@@ -31,6 +31,7 @@ class InvoiceController extends Controller
         'items.*.unit_price' => 'required|numeric|min:0',
         'items.*.weight' => 'nullable|numeric|min:0',
         'items.*.product_name' => 'nullable|string|max:200',
+        'items.*.category_name' => 'nullable|string|max:100',  // ✅ ADD THIS
         'items.*.making_charges_total' => 'nullable|numeric',
         'items.*.stone_charges_total' => 'nullable|numeric',
         'items.*.gst_percent' => 'nullable|numeric',
@@ -54,33 +55,34 @@ class InvoiceController extends Controller
 
         // First pass: calculate totals
         foreach ($request->items as $item) {
-    $product = Product::find($item['product_id']);
-    $unitPrice = $item['unit_price'];
-    $makingLine = $item['making_charges_total'] ?? 0;
-    $stoneLine = $item['stone_charges_total'] ?? 0;
-    $gstPercent = isset($item['gst_percent']) ? (float)$item['gst_percent'] : $product->gst_percent;
-    $weight = $item['weight'] ?? $product->weight;
+            $product = Product::find($item['product_id']);
+            $unitPrice = $item['unit_price'];
+            $makingLine = $item['making_charges_total'] ?? 0;
+            $stoneLine = $item['stone_charges_total'] ?? 0;
+            $gstPercent = $item['gst_percent'] ?? $product->gst_percent;
+            $weight = $item['weight'] ?? $product->weight;
 
-    $itemTotal = $unitPrice * $item['quantity'];
-    $subtotal += $itemTotal;
-    $totalMaking += $makingLine;   // for display only
-    $totalStone += $stoneLine;     // for display only
-    $totalGST += $itemTotal * ($gstPercent / 100);   // ✅ GST on itemTotal only
+            $itemTotal = $unitPrice * $item['quantity'];
+            $subtotal += $itemTotal;
+            $totalMaking += $makingLine;
+            $totalStone += $stoneLine;
+            $totalGST += ($itemTotal + $makingLine + $stoneLine) * ($gstPercent / 100);
 
-    $itemsData[] = [
-        'product_id' => $product->id,
-        'product_name' => $item['product_name'] ?? null,
-        'quantity' => $item['quantity'],
-        'weight' => $weight,
-        'unit_price' => $unitPrice,
-        'making_charges' => $makingLine,
-        'stone_charges' => $stoneLine,
-        'gst_percent' => $gstPercent,
-        'total' => $itemTotal,
-    ];
-}
+            $itemsData[] = [
+                'product_id' => $product->id,
+                'product_name' => $item['product_name'] ?? null,
+                'category_name' => $item['category_name'] ?? null,   // ✅ ADD THIS
+                'quantity' => $item['quantity'],
+                'weight' => $weight,
+                'unit_price' => $unitPrice,
+                'making_charges' => $makingLine,
+                'stone_charges' => $stoneLine,
+                'gst_percent' => $gstPercent,
+                'total' => $itemTotal,
+            ];
+        }
 
-        $taxableAmount = $subtotal;
+        $taxableAmount = $subtotal + $totalMaking + $totalStone;
         $discountAmount = 0;
         if ($request->discount_type == 'percentage') {
             $discountAmount = ($taxableAmount + $totalGST) * ($request->discount_value / 100);
@@ -125,29 +127,30 @@ class InvoiceController extends Controller
         $invoice->rates_snapshot = json_encode($ratesSnapshot);
         $invoice->save();
 
+        // Save items and deduct stock
         foreach ($itemsData as $itemData) {
-    $itemData['invoice_id'] = $invoice->id;
-    InvoiceItem::create($itemData);
+            $itemData['invoice_id'] = $invoice->id;
+            InvoiceItem::create($itemData);
 
-    $product = Product::find($itemData['product_id']);
-    $product->decrement('stock_quantity', $itemData['quantity']);
-    StockTransaction::create([
-        'product_id' => $product->id,
-        'type' => 'out',
-        'quantity' => $itemData['quantity'],
-        'reference' => $invoice->invoice_number
-    ]);
-}
+            $product = Product::find($itemData['product_id']);
+            $product->decrement('stock_quantity', $itemData['quantity']);
+            StockTransaction::create([
+                'product_id' => $product->id,
+                'type' => 'out',
+                'quantity' => $itemData['quantity'],
+                'reference' => $invoice->invoice_number
+            ]);
+        }
 
-// Save payment
-Payment::create([
-    'invoice_id' => $invoice->id,
-    'amount' => $request->paid_amount,
-    'payment_method' => $request->payment_method
-]);
+        // Save payment
+        Payment::create([
+            'invoice_id' => $invoice->id,
+            'amount' => $request->paid_amount,
+            'payment_method' => $request->payment_method
+        ]);
 
-DB::commit();
-return response()->json(['message' => 'Invoice created', 'invoice' => $invoice], 201);
+        DB::commit();
+        return response()->json(['message' => 'Invoice created', 'invoice' => $invoice], 201);
 
     } catch (\Exception $e) {
         DB::rollBack();
