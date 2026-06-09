@@ -31,7 +31,7 @@ class InvoiceController extends Controller
         'items.*.unit_price' => 'required|numeric|min:0',
         'items.*.weight' => 'nullable|numeric|min:0',
         'items.*.product_name' => 'nullable|string|max:200',
-        'items.*.category_name' => 'nullable|string|max:100',  // ✅ ADD THIS
+        'items.*.category_name' => 'nullable|string|max:100',
         'items.*.making_charges_total' => 'nullable|numeric',
         'items.*.stone_charges_total' => 'nullable|numeric',
         'items.*.gst_percent' => 'nullable|numeric',
@@ -53,50 +53,50 @@ class InvoiceController extends Controller
         $totalGST = 0;
         $itemsData = [];
 
-        // First pass: calculate totals
         foreach ($request->items as $item) {
             $product = Product::find($item['product_id']);
-            $unitPrice = $item['unit_price'];
-            $makingLine = $item['making_charges_total'] ?? 0;
-            $stoneLine = $item['stone_charges_total'] ?? 0;
+            $unitPrice = $item['unit_price'];                         // from frontend (dynamic)
+            $quantity = $item['quantity'];
+            $makingTotal = $item['making_charges_total'] ?? 0;        // total making for this line
+            $stoneTotal = $item['stone_charges_total'] ?? 0;          // total stone for this line
             $gstPercent = $item['gst_percent'] ?? $product->gst_percent;
             $weight = $item['weight'] ?? $product->weight;
 
-            $itemTotal = $unitPrice * $item['quantity'];
+            $itemTotal = $unitPrice * $quantity;                      // item price already includes making & stone
             $subtotal += $itemTotal;
-            $totalMaking += $makingLine;
-            $totalStone += $stoneLine;
-            $totalGST += ($itemTotal + $makingLine + $stoneLine) * ($gstPercent / 100);
+            $totalMaking += $makingTotal;
+            $totalStone += $stoneTotal;
+            $totalGST += $itemTotal * ($gstPercent / 100);            // GST on the full item price
 
             $itemsData[] = [
                 'product_id' => $product->id,
                 'product_name' => $item['product_name'] ?? null,
-                'category_name' => $item['category_name'] ?? null,   // ✅ ADD THIS
-                'quantity' => $item['quantity'],
+                'category_name' => $item['category_name'] ?? null,
+                'quantity' => $quantity,
                 'weight' => $weight,
                 'unit_price' => $unitPrice,
-                'making_charges' => $makingLine,
-                'stone_charges' => $stoneLine,
+                'making_charges' => $makingTotal,
+                'stone_charges' => $stoneTotal,
                 'gst_percent' => $gstPercent,
                 'total' => $itemTotal,
             ];
         }
 
-        $taxableAmount = $subtotal + $totalMaking + $totalStone;
+        // Discount calculation
         $discountAmount = 0;
         if ($request->discount_type == 'percentage') {
-            $discountAmount = ($taxableAmount + $totalGST) * ($request->discount_value / 100);
+            $discountAmount = ($subtotal + $totalGST) * ($request->discount_value / 100);
         } elseif ($request->discount_type == 'flat') {
             $discountAmount = $request->discount_value;
         }
 
-        $grandTotal = $taxableAmount + $totalGST - $discountAmount;
+        $grandTotal = $subtotal + $totalGST - $discountAmount;
         $roundOff = round($grandTotal) - $grandTotal;
         $grandTotal = round($grandTotal);
         $dueAmount = $grandTotal - $request->paid_amount;
         $paymentStatus = $dueAmount <= 0 ? 'paid' : ($request->paid_amount > 0 ? 'partial' : 'unpaid');
 
-        // Create invoice object
+        // Create invoice
         $invoice = new Invoice();
         $invoice->invoice_number = 'INV-' . time() . rand(100, 999);
         $invoice->customer_id = $request->customer_id;
@@ -105,7 +105,7 @@ class InvoiceController extends Controller
         $invoice->subtotal = $subtotal;
         $invoice->making_charges_total = $totalMaking;
         $invoice->stone_charges_total = $totalStone;
-        $invoice->taxable_amount = $taxableAmount;
+        $invoice->taxable_amount = $subtotal;   // because GST is already applied on subtotal
         $invoice->gst_amount = $totalGST;
         $invoice->cgst_amount = $totalGST / 2;
         $invoice->sgst_amount = $totalGST / 2;
