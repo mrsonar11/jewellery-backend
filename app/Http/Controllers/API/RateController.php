@@ -17,27 +17,32 @@ class RateController extends Controller
 
     public function todayWithComparison()
     {
-        $today = Carbon::today();
-        $yesterday = Carbon::yesterday();
+        try {
+            $today = Carbon::today();
+            $yesterday = Carbon::yesterday();
 
-        $todayRates = DailyRate::where('rate_date', $today)->get()->keyBy('category');
-        $yesterdayRates = DailyRate::where('rate_date', $yesterday)->get()->keyBy('category');
+            $todayRates = DailyRate::where('rate_date', $today)->get()->keyBy('category');
+            $yesterdayRates = DailyRate::where('rate_date', $yesterday)->get()->keyBy('category');
 
-        $categories = ['Gold', 'Silver', 'Diamond', 'Platinum'];
-        $result = [];
+            $categories = ['Gold', 'Silver', 'Diamond', 'Platinum'];
+            $result = [];
 
-        foreach ($categories as $cat) {
-            $todayRate = $todayRates[$cat]->rate_per_10gm ?? null;
-            $yesterdayRate = $yesterdayRates[$cat]->rate_per_10gm ?? null;
-            $result[$cat] = [
-                'today' => $todayRate,
-                'yesterday' => $yesterdayRate,
-                'change' => $todayRate && $yesterdayRate ? $todayRate - $yesterdayRate : null,
-                'percentage' => $yesterdayRate && $todayRate ? (($todayRate - $yesterdayRate) / $yesterdayRate * 100) : null
-            ];
+            foreach ($categories as $cat) {
+                $todayRate = $todayRates[$cat]->rate_per_10gm ?? null;
+                $yesterdayRate = $yesterdayRates[$cat]->rate_per_10gm ?? null;
+                $result[$cat] = [
+                    'today' => $todayRate,
+                    'yesterday' => $yesterdayRate,
+                    'change' => $todayRate && $yesterdayRate ? $todayRate - $yesterdayRate : null,
+                    'percentage' => $yesterdayRate && $todayRate ? (($todayRate - $yesterdayRate) / $yesterdayRate * 100) : null
+                ];
+            }
+
+            return response()->json($result);
+        } catch (\Exception $e) {
+            \Log::error('Rates comparison error: ' . $e->getMessage());
+            return response()->json(['error' => 'Failed to fetch rates', 'details' => $e->getMessage()], 500);
         }
-
-        return response()->json($result);
     }
 
     public function store(Request $request)
