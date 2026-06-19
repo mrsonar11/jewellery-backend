@@ -15,9 +15,35 @@ use Carbon\Carbon;
 
 class InvoiceController extends Controller
 {
-    public function index()
+    public function index(Request $request)
     {
-        $invoices = Invoice::with('customer', 'user')->latest()->paginate(15);
+        $query = Invoice::with('customer');
+
+        // Search by customer name or invoice number
+        if ($request->has('search') && $request->search) {
+            $search = $request->search;
+            $query->where(function($q) use ($search) {
+                $q->where('invoice_number', 'like', "%$search%")
+                ->orWhereHas('customer', function($cq) use ($search) {
+                    $cq->where('name', 'like', "%$search%");
+                });
+            });
+        }
+
+        // Date range filter
+        if ($request->has('from_date') && $request->from_date) {
+            $query->whereDate('invoice_date', '>=', $request->from_date);
+        }
+        if ($request->has('to_date') && $request->to_date) {
+            $query->whereDate('invoice_date', '<=', $request->to_date);
+        }
+
+        // Status filter
+        if ($request->has('status') && $request->status) {
+            $query->where('payment_status', $request->status);
+        }
+
+        $invoices = $query->latest()->paginate(15);
         return response()->json($invoices);
     }
 
@@ -117,6 +143,7 @@ class InvoiceController extends Controller
         $invoice->paid_amount = $request->paid_amount;
         $invoice->due_amount = $dueAmount;
         $invoice->payment_status = $paymentStatus;
+        $invoice->payments = $payments;
 
         // Rates snapshot
         $todayRates = DailyRate::where('rate_date', Carbon::today())->get()->keyBy('category');
@@ -160,34 +187,42 @@ class InvoiceController extends Controller
     
     public function show($id)
         {
-            $invoice = Invoice::with('customer', 'items.product.category')->findOrFail($id);
+            $invoice = Invoice::with('customer', 'items.product.category', 'payments')->findOrFail($id);
             return response()->json($invoice);
         }
 
     public function recordPayment(Request $request, $id)
-{
-    $request->validate([
-        'amount' => 'required|numeric|min:0.01'
-    ]);
+    {
+        $request->validate([
+            'amount' => 'required|numeric|min:0.01',
+            'payment_date' => 'required|date',
+            'payment_method' => 'required|in:cash,card,upi,mixed',
+            'remarks' => 'nullable|string',
+        ]);
 
-    $invoice = Invoice::findOrFail($id);
-    $newPaid = $invoice->paid_amount + $request->amount;
+        $invoice = Invoice::findOrFail($id);
+        $newPaid = $invoice->paid_amount + $request->amount;
 
-    if ($newPaid > $invoice->grand_total) {
-        return response()->json(['error' => 'Amount exceeds due amount'], 422);
+        if ($newPaid > $invoice->grand_total) {
+            return response()->json(['error' => 'Amount exceeds due amount'], 422);
+        }
+
+        $invoice->paid_amount = $newPaid;
+        $invoice->due_amount = $invoice->grand_total - $newPaid;
+        $invoice->payment_status = $invoice->due_amount <= 0 ? 'paid' : ($newPaid > 0 ? 'partial' : 'unpaid');
+        $invoice->save();
+
+        // Store payment with method
+        Payment::create([
+            'invoice_id' => $invoice->id,
+            'amount' => $request->amount,
+            'payment_method' => $request->payment_method,   // ✅ added
+            'created_at' => $request->payment_date,         // optional: use the date from request
+        ]);
+
+        // Also update the `created_at` to the provided date if needed (optional)
+        // The payment creation above uses `payment_date` but we can set it explicitly.
+
+        return response()->json(['message' => 'Payment recorded', 'invoice' => $invoice]);
     }
-
-    $invoice->paid_amount = $newPaid;
-    $invoice->due_amount = $invoice->grand_total - $newPaid;
-    $invoice->payment_status = $invoice->due_amount <= 0 ? 'paid' : ($newPaid > 0 ? 'partial' : 'unpaid');
-    $invoice->save();
-
-    Payment::create([
-        'invoice_id' => $invoice->id,
-        'amount' => $request->amount,
-        'payment_method' => 'cash'   // you can add a dropdown later
-    ]);
-
-    return response()->json(['message' => 'Payment recorded', 'invoice' => $invoice]);
-}
 }

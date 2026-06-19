@@ -118,7 +118,19 @@ class MortgageController extends Controller
             $mortgage->status = 'repaid';
             $mortgage->save();
         }
-
         return response()->json(['message' => 'Payment recorded', 'payment' => $payment]);
     }
+    public function release($id)
+        {
+            if (auth()->user()->role !== 'admin') {
+                return response()->json(['error' => 'Unauthorized'], 403);
+            }
+            $mortgage = Mortgage::findOrFail($id);
+            if ($mortgage->status === 'released') {
+                return response()->json(['error' => 'Already released'], 400);
+            }
+            $mortgage->status = 'released';
+            $mortgage->save();
+            return response()->json(['message' => 'Item released successfully', 'mortgage' => $mortgage]);
+        }
 }

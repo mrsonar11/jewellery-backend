@@ -59,4 +59,5 @@ Route::middleware('auth:api')->group(function () {
     // Mortgage
     Route::apiResource('mortgages', MortgageController::class);
     Route::post('/mortgages/{id}/payments', [MortgageController::class, 'addPayment']);
+    Route::post('/mortgages/{id}/release', [MortgageController::class, 'release']);
 });
